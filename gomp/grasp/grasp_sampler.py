@@ -39,24 +39,23 @@ def create_topdown_grasp(pos: np.ndarray, angle_z: float = 0.0,
     Grasp
         A top-down grasp with rotational DOF.
     """
-    # Top-down: z-axis pointing down, x-axis in the approach plane
-    # Rotation by angle_z around the z-axis
+    # Top-down: z-axis pointing down, with yaw rotation.
+    # Use R = Rz(angle_z) @ Rx(π) to get a right-handed frame
+    # Rx(π): flips y and z, so gripper z points down, y flips
     cos_z = np.cos(angle_z)
     sin_z = np.sin(angle_z)
-    # Gripper frame: z pointing down (-z world), x rotated by angle_z
+    # Rz(angle_z) @ Rx(pi) =
+    #   [cos_z, sin_z,  0]
+    #   [sin_z, -cos_z, 0]
+    #   [0,      0,    -1]  -> det = cos_z * cos_z + sin_z * sin_z = +1
+    # Wait, let's compute properly:
+    # Rz = [[cos, -sin, 0], [sin, cos, 0], [0, 0, 1]]
+    # Rx(pi) = [[1, 0, 0], [0, -1, 0], [0, 0, -1]]
+    # Rz @ Rx(pi) = [[cos, sin, 0], [sin, -cos, 0], [0, 0, -1]]
     rotmat = np.array([
-        [cos_z, -sin_z, 0],
-        [sin_z, cos_z, 0],
-        [0, 0, -1]  # z-axis pointing down
-    ]).T  # Transpose because we want columns to be frame axes
-
-    # Actually, for a top-down grasp:
-    # The approach direction is -z (world), so the gripper's z-axis = [0, 0, -1]
-    # The gripper's x-axis defines jaw opening direction
-    rotmat = np.array([
-        [cos_z, sin_z, 0],
-        [-sin_z, cos_z, 0],
-        [0, 0, -1]
+        [cos_z, sin_z,  0],
+        [sin_z, -cos_z, 0],
+        [0,     0,     -1]
     ])
 
     if axis is None:

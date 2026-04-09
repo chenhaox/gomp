@@ -5,6 +5,9 @@ Demonstrates GOMP's ability to optimize over multiple candidate grasps
 and select the one yielding the shortest trajectory.
 """
 
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'wrs'))
 import numpy as np
 import gomp  # noqa: F401
 from gomp.robot_adapter import RobotAdapter
@@ -20,7 +23,7 @@ def main():
     print("=" * 60)
 
     # Robot
-    robot = RobotAdapter(enable_cc=True)
+    robot = RobotAdapter()
 
     # Generate multiple candidate pick grasps in a bin
     bin_center = np.array([0.4, 0.0, 0.0])
@@ -51,8 +54,8 @@ def main():
     planner = GOMPPlanner(
         robot=robot,
         t_step=0.008,
-        initial_H=50,
-        min_H=5,
+        initial_H=120,
+        min_H=10,
         verbose=True,
         sqp_kwargs={'max_iterations': 25}
     )

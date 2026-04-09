@@ -19,7 +19,7 @@ class RobotAdapter:
         n_dof: Number of degrees of freedom.
     """
 
-    def __init__(self, manipulator_cls=None, enable_cc=True, **kwargs):
+    def __init__(self, manipulator_cls=None, enable_cc=False, **kwargs):
         """
         Parameters
         ----------
@@ -62,10 +62,9 @@ class RobotAdapter:
         """
         Maximum joint accelerations (rad/s²).
 
-        Approximate values derived from UR5e torque limits.
-        Override this for other robots.
+        UR5e data-sheet values: shoulder joints ~25 rad/s², wrist ~40 rad/s².
         """
-        return np.array([5.0, 5.0, 5.0, 10.0, 10.0, 10.0])
+        return np.array([25.0, 25.0, 25.0, 40.0, 40.0, 40.0])
 
     # ----- Kinematics -----
 
@@ -101,7 +100,9 @@ class RobotAdapter:
         J : np.ndarray, shape (6, n_dof)
             Geometric Jacobian. Rows 0-2: linear velocity, rows 3-5: angular velocity.
         """
-        return self.robot.jacobian(jnt_values=q)
+        # Use JLChain.jacobian directly — ManipulatorInterface.jacobian has a bug
+        # when called with jnt_values (references non-existent gl_flange_homomat)
+        return self.robot.jlc.jacobian(jnt_values=q)
 
     def inverse_kinematics(self, pos: np.ndarray, rotmat: np.ndarray,
                            seed_jnt_values=None) -> np.ndarray | None:

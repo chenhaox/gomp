@@ -105,7 +105,7 @@ class GraspSet:
         return R_0
 
     def compute_epsilon(self, free_tol: float = 1e3,
-                        tight_tol: float = 1e-4) -> np.ndarray:
+                        tight_tol: float = 0.01) -> np.ndarray:
         """
         Compute the tolerance vector ε_0 for the grasp DOF constraint.
 

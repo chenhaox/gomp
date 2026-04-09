@@ -11,6 +11,7 @@ import os
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'wrs'))
 import gomp  # noqa: F401
 
 from gomp.robot_adapter import RobotAdapter
@@ -32,7 +33,7 @@ def main():
     print("=" * 60)
 
     # Setup
-    robot = RobotAdapter(enable_cc=True)
+    robot = RobotAdapter()
     n = robot.n_dof
     t_step = 0.008
 
@@ -73,7 +74,7 @@ def main():
 
     # Solve at multiple H values and collect trajectories
     trajectories = []
-    H_values = [60, 40, 25, 15]
+    H_values = [120, 100, 85, 70]
 
     x = None
     for H in H_values:
@@ -82,7 +83,7 @@ def main():
         print(f"{'='*40}")
 
         if x is None:
-            x = spline_warm_start(q_start, q_goal, H, n)
+            x = spline_warm_start(q_start, q_goal, H, n, t_step)
         else:
             x = interpolate_to_shorter(x_prev, H_prev, H, n, t_step)
 
@@ -100,7 +101,7 @@ def main():
 
         qp = QPBuilder(H, n)
         waypoints = qp.extract_waypoints(result.x)
-        velocities = qp.extract_velocities(result.x) / t_step
+        velocities = qp.extract_velocities(result.x)
 
         traj = Trajectory(
             waypoints=waypoints,

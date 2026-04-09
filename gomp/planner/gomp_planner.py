@@ -78,10 +78,9 @@ class GOMPPlanner:
 
         # SQP solver configuration
         self.sqp_kwargs = sqp_kwargs or {}
-        self.sqp_solver = SQPSolver(
-            verbose=verbose,
-            **self.sqp_kwargs
-        )
+        if 'verbose' not in self.sqp_kwargs:
+            self.sqp_kwargs['verbose'] = verbose
+        self.sqp_solver = SQPSolver(**self.sqp_kwargs)
 
     def plan(self,
              grasp_start: Grasp,
@@ -147,7 +146,7 @@ class GOMPPlanner:
 
         # --- Step 3: Initialize trajectory with spline ---
         H = self.initial_H
-        x = spline_warm_start(q_start, q_goal, H, n)
+        x = spline_warm_start(q_start, q_goal, H, n, self.t_step)
 
         if self.verbose:
             print(f"GOMP: Spline warm start initialized (H={H})")
@@ -183,12 +182,10 @@ class GOMPPlanner:
             waypoints = qp.extract_waypoints(result.x)
             velocities = qp.extract_velocities(result.x)
 
-            # Scale velocities from per-step to per-second
-            velocities_per_sec = velocities / self.t_step
-
+            # Velocities are already in rad/s from the SQP
             best_trajectory = Trajectory(
                 waypoints=waypoints,
-                velocities=velocities_per_sec,
+                velocities=velocities,
                 t_step=self.t_step,
                 H=H
             )

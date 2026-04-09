@@ -15,6 +15,7 @@ import numpy as np
 
 # Ensure gomp and wrs are importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'wrs'))
 import gomp  # noqa: F401
 
 from gomp.robot_adapter import RobotAdapter
@@ -32,7 +33,7 @@ def main(visualize_3d=False):
 
     # --- 1. Create robot ---
     print("\n1. Creating UR5e robot...")
-    robot = RobotAdapter(enable_cc=True)
+    robot = RobotAdapter()
     print(f"   DOF: {robot.n_dof}")
     print(f"   q_min: {np.round(robot.q_min, 2)}")
     print(f"   q_max: {np.round(robot.q_max, 2)}")
@@ -75,13 +76,13 @@ def main(visualize_3d=False):
     planner = GOMPPlanner(
         robot=robot,
         t_step=0.008,
-        initial_H=60,
-        min_H=5,
+        initial_H=120,
+        min_H=10,
         H_reduction='geometric',
         H_reduction_factor=0.85,
         sqp_kwargs={
             'max_iterations': 30,
-            'initial_trust_region': 1.0,
+            'initial_trust_region': 2.0,
         },
         verbose=True
     )
@@ -102,7 +103,7 @@ def main(visualize_3d=False):
     print(f"  Duration: {trajectory.duration * 1000:.0f} ms")
     print(f"  Waypoints: {trajectory.n_waypoints}")
     print(f"  Max velocity: {np.round(trajectory.max_velocity(), 2)} rad/s")
-    print(f"  Max acceleration: {np.round(trajectory.max_acceleration(), 2)} rad/s²")
+    print(f"  Max acceleration: {np.round(trajectory.max_acceleration(), 2)} rad/s^2")
 
     limits = trajectory.is_within_limits(
         robot.q_min, robot.q_max, robot.v_max, robot.a_max

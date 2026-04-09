@@ -155,51 +155,23 @@ class SQPSolver:
             l = np.concatenate([l_static, l_dynamic])
             u = np.concatenate([u_static, u_dynamic])
 
-            # Solve QP
-            if osqp_solver is None:
-                # First iteration: create solver
-                osqp_solver = osqp.OSQP()
-                osqp_solver.setup(
-                    P=sp.triu(P, format='csc'),
-                    q=p,
-                    A=A,
-                    l=l,
-                    u=u,
-                    eps_abs=1e-5,
-                    eps_rel=1e-5,
-                    max_iter=4000,
-                    warm_start=True,
-                    verbose=False,
-                    polish=True
-                )
-            else:
-                # Subsequent iterations: update and warm start
-                # Resize if constraint matrix changed shape
-                try:
-                    osqp_solver.update(
-                        q=p,
-                        l=l,
-                        u=u,
-                        Ax=A.data
-                    )
-                except Exception:
-                    # If update fails (e.g., sparsity pattern changed),
-                    # recreate the solver
-                    osqp_solver = osqp.OSQP()
-                    osqp_solver.setup(
-                        P=sp.triu(P, format='csc'),
-                        q=p,
-                        A=A,
-                        l=l,
-                        u=u,
-                        eps_abs=1e-5,
-                        eps_rel=1e-5,
-                        max_iter=4000,
-                        warm_start=True,
-                        verbose=False,
-                        polish=True
-                    )
-                osqp_solver.warm_start(x=x_current)
+            # Solve QP — always create fresh solver since sparsity pattern
+            # changes between SQP iterations (different Jacobians)
+            osqp_solver = osqp.OSQP()
+            osqp_solver.setup(
+                P=sp.triu(P, format='csc'),
+                q=p,
+                A=A,
+                l=l,
+                u=u,
+                eps_abs=1e-5,
+                eps_rel=1e-5,
+                max_iter=4000,
+                warm_start=True,
+                verbose=False,
+                polish=True
+            )
+            osqp_solver.warm_start(x=x_current)
 
             result = osqp_solver.solve()
 
