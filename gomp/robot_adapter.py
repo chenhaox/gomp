@@ -6,24 +6,7 @@ from any WRS manipulator model (default: UR5e).
 """
 
 import numpy as np
-import sys
-import os
-
-# Ensure WRS is on path
-_wrs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'wrs')
-if os.path.isdir(_wrs_path) and _wrs_path not in sys.path:
-    sys.path.insert(0, _wrs_path)
-
-# Lazy import to avoid circular dependency and handle WRS init
-_UR5E = None
-
-
-def _get_ur5e_cls():
-    global _UR5E
-    if _UR5E is None:
-        from wrs.robot_sim.manipulators.ur5e.ur5e import UR5E
-        _UR5E = UR5E
-    return _UR5E
+from wrs.robot_sim.manipulators.ur5e.ur5e import UR5E
 
 
 class RobotAdapter:
@@ -36,7 +19,7 @@ class RobotAdapter:
         n_dof: Number of degrees of freedom.
     """
 
-    def __init__(self, manipulator_cls=UR5E, enable_cc=True, **kwargs):
+    def __init__(self, manipulator_cls=None, enable_cc=True, **kwargs):
         """
         Parameters
         ----------
@@ -47,6 +30,8 @@ class RobotAdapter:
         **kwargs : dict
             Additional arguments passed to the manipulator constructor.
         """
+        if manipulator_cls is None:
+            manipulator_cls = UR5E
         self.robot = manipulator_cls(enable_cc=enable_cc, **kwargs)
         self.n_dof = self.robot.n_dof
 

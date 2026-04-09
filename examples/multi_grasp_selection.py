@@ -5,13 +5,8 @@ Demonstrates GOMP's ability to optimize over multiple candidate grasps
 and select the one yielding the shortest trajectory.
 """
 
-import sys
-import os
 import numpy as np
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import gomp  # noqa: F401
-
 from gomp.robot_adapter import RobotAdapter
 from gomp.grasp.grasp_sampler import create_topdown_grasp, sample_bin_grasps
 from gomp.obstacles.depth_map import DepthMapObstacle
