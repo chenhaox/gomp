@@ -1,0 +1,26 @@
+# Paper PDF and markdown
+2003.02401v1.pdf
+MinerU_markdown_2003.02401v1_2042192805916962816.md
+
+# IDE
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,3 @@
+[submodule "wrs"]
+	path = wrs
+	url = https://github.com/chenhaox/wrs.git

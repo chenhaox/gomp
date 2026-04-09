@@ -1,0 +1,19 @@
+[project]
+name = "gomp"
+version = "0.1.0"
+description = "GOMP: Grasp-Optimized Motion Planning for Bin Picking"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.10",
+    "osqp>=0.6",
+    "matplotlib>=3.7",
+    "panda3d>=1.10.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
