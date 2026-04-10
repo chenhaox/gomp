@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'wrs'))
 import gomp  # noqa: F401
 
 from gomp.robot_adapter import RobotAdapter
+from gomp.grasp.grasp import Grasp
 from gomp.grasp.grasp_sampler import create_topdown_grasp
 from gomp.obstacles.depth_map import DepthMapObstacle
 from gomp.planner.gomp_planner import GOMPPlanner
@@ -101,9 +102,81 @@ def draw_ghost_poses(base, robot_adapter, trajectory, n_frames=10):
     return ghost_models
 
 
+def draw_grasp_set(base, grasp: Grasp, n_samples: int = 7,
+                   label: str = "grasp",
+                   color_start: np.ndarray = np.array([1.0, 0.3, 0.0]),
+                   color_end: np.ndarray = np.array([0.0, 0.8, 0.3])):
+    """
+    Visualize the rotational DOF of a grasp as a fan of coordinate frames.
+
+    Samples poses across [theta_min, theta_max] and draws small frames at each,
+    plus a dashed arc showing the rotation axis/range.
+
+    Parameters
+    ----------
+    base : wd.World
+        WRS world to attach models to.
+    grasp : Grasp
+        The grasp with rotational DOF to visualize.
+    n_samples : int
+        Number of sampled poses to draw.
+    label : str
+        Label for console output.
+    color_start : np.ndarray
+        RGB color for the first sample (theta_min).
+    color_end : np.ndarray
+        RGB color for the last sample (theta_max).
+    """
+    from wrs.modeling import geometric_model as gm
+
+    poses = grasp.sample_poses(n_samples)
+
+    for idx, (pos, rotmat, theta) in enumerate(poses):
+        frac = idx / max(1, len(poses) - 1)
+        # Interpolate color
+        rgb = (1.0 - frac) * color_start + frac * color_end
+        alpha_val = 0.4 + 0.5 * (1.0 - abs(2.0 * frac - 1.0))  # brighter in the middle
+
+        # Draw a small frame at this grasp pose
+        gm.gen_frame(pos=pos, rotmat=rotmat,
+                     ax_length=0.04, ax_radius=0.0015,
+                     alpha=alpha_val).attach_to(base)
+
+        # Draw a small sphere at the grasp center for each sample
+        gm.gen_sphere(pos=pos, radius=0.005,
+                      rgb=rgb, alpha=alpha_val).attach_to(base)
+
+    # Draw the rotation axis as a dashed line through the grasp center
+    axis_half_len = 0.06
+    axis_start = grasp.pos - grasp.axis * axis_half_len
+    axis_end = grasp.pos + grasp.axis * axis_half_len
+    gm.gen_dashed_stick(spos=axis_start, epos=axis_end,
+                        radius=0.001, rgb=np.array([0.5, 0.5, 0.5]),
+                        alpha=0.6).attach_to(base)
+
+    # Connect the sampled EE positions with thin sticks to show the arc
+    for i in range(len(poses) - 1):
+        frac = i / max(1, len(poses) - 2)
+        rgb = (1.0 - frac) * color_start + frac * color_end
+        p0 = poses[i][0]
+        p1 = poses[i + 1][0]
+        # Only draw if positions differ (they share the same pos for top-down grasps,
+        # but the frames rotate — still useful to draw the axis indicator)
+        dist = np.linalg.norm(p1 - p0)
+        if dist > 1e-6:
+            gm.gen_stick(spos=p0, epos=p1, radius=0.001,
+                         rgb=rgb, alpha=0.5).attach_to(base)
+
+    print(f"  {label}: {n_samples} sampled poses "
+          f"over θ ∈ [{np.degrees(grasp.theta_min):.0f}°, "
+          f"{np.degrees(grasp.theta_max):.0f}°]")
+
+
 def visualize_trajectory_animated(robot_adapter: RobotAdapter,
                                   trajectory: Trajectory,
                                   obstacles: DepthMapObstacle = None,
+                                  pick_grasp: Grasp = None,
+                                  place_grasp: Grasp = None,
                                   n_ghost_frames: int = 8,
                                   playback_speed: float = 1.0):
     """
@@ -145,6 +218,18 @@ def visualize_trajectory_animated(robot_adapter: RobotAdapter,
     # Draw obstacles
     if obstacles is not None:
         draw_bin_obstacle(base, obstacles)
+
+    # Draw grasp sets (rotational DOF visualization)
+    if pick_grasp is not None:
+        print("  Drawing pick grasp set...")
+        draw_grasp_set(base, pick_grasp, n_samples=7, label="Pick grasp set",
+                       color_start=np.array([1.0, 0.3, 0.0]),
+                       color_end=np.array([0.0, 0.8, 0.3]))
+    if place_grasp is not None:
+        print("  Drawing place grasp set...")
+        draw_grasp_set(base, place_grasp, n_samples=7, label="Place grasp set",
+                       color_start=np.array([0.2, 0.3, 1.0]),
+                       color_end=np.array([0.8, 0.2, 0.8]))
 
     # Draw ghost poses
     print(f"  Drawing {n_ghost_frames} ghost keyframes...")
@@ -299,6 +384,8 @@ def main():
         robot_adapter=robot,
         trajectory=trajectory,
         obstacles=bin_obstacle,
+        pick_grasp=pick_grasp,
+        place_grasp=place_grasp,
         n_ghost_frames=8,
         playback_speed=0.5  # Half speed for better visibility
     )

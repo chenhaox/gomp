@@ -114,7 +114,8 @@ class GraspSet:
         and remaining values are small.
 
         After R_0 rotation, the DOF aligns with the z-axis, so:
-        - ε[2] (linear z) and ε[5] (angular z) are large (free)
+        - ε[5] (angular z) is large (free) when the grasp has rotational DOF
+        - ε[5] stays tight when theta_min ≈ theta_max (single fixed pose)
         - All other components are tight
 
         Parameters
@@ -130,9 +131,12 @@ class GraspSet:
             Tolerance vector.
         """
         epsilon = np.full(6, tight_tol)
-        # After R_0 rotation, the grasp rotation axis aligns with z
-        # The angular component around z is the free DOF
-        epsilon[5] = free_tol  # Angular z is the rotation DOF
+        # After R_0 rotation, the grasp rotation axis aligns with z.
+        # Only free the angular-z component if the grasp has a non-trivial
+        # rotational DOF range; otherwise keep it tight (single fixed pose).
+        theta_range = abs(self.grasp.theta_max - self.grasp.theta_min)
+        if theta_range > 1e-6:
+            epsilon[5] = free_tol  # Angular z is the rotation DOF
         return epsilon
 
     def compute_constraint_bounds(self, q_current: np.ndarray,
