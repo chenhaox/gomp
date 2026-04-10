@@ -220,16 +220,33 @@ def visualize_trajectory_animated(robot_adapter: RobotAdapter,
         draw_bin_obstacle(base, obstacles)
 
     # Draw grasp sets (rotational DOF visualization)
+    # The fan shows the full range; the trajectory endpoints show what the
+    # optimizer actually selected within that range.
     if pick_grasp is not None:
         print("  Drawing pick grasp set...")
         draw_grasp_set(base, pick_grasp, n_samples=7, label="Pick grasp set",
                        color_start=np.array([1.0, 0.3, 0.0]),
                        color_end=np.array([0.0, 0.8, 0.3]))
+        # Draw the actual optimized pick pose (from trajectory start)
+        pos_pick, rot_pick = robot_adapter.forward_kinematics(trajectory.waypoints[0])
+        gm.gen_frame(pos=pos_pick, rotmat=rot_pick,
+                     ax_length=0.07, ax_radius=0.003).attach_to(base)
+        gm.gen_sphere(pos=pos_pick, radius=0.010,
+                      rgb=np.array([1.0, 0.0, 0.0]), alpha=0.9).attach_to(base)
+        print(f"    → Optimized pick EE at {np.round(pos_pick, 4)}")
+
     if place_grasp is not None:
         print("  Drawing place grasp set...")
         draw_grasp_set(base, place_grasp, n_samples=7, label="Place grasp set",
                        color_start=np.array([0.2, 0.3, 1.0]),
                        color_end=np.array([0.8, 0.2, 0.8]))
+        # Draw the actual optimized place pose (from trajectory end)
+        pos_place, rot_place = robot_adapter.forward_kinematics(trajectory.waypoints[-1])
+        gm.gen_frame(pos=pos_place, rotmat=rot_place,
+                     ax_length=0.07, ax_radius=0.003).attach_to(base)
+        gm.gen_sphere(pos=pos_place, radius=0.010,
+                      rgb=np.array([0.0, 0.0, 1.0]), alpha=0.9).attach_to(base)
+        print(f"    → Optimized place EE at {np.round(pos_place, 4)}")
 
     # Draw ghost poses
     print(f"  Drawing {n_ghost_frames} ghost keyframes...")

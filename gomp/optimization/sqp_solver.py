@@ -69,6 +69,10 @@ class SQPSolver:
         Factor to expand trust region on improvement.
     trust_region_shrink : float
         Factor to shrink trust region on violation.
+    endpoint_jnt_tol : float
+        Joint-space tolerance for endpoint pinning (radians).
+        Controls how tightly the endpoint joints are constrained
+        near the IK solution to prevent FK drift.
     verbose : bool
         Print iteration info.
     """
@@ -80,6 +84,7 @@ class SQPSolver:
                  initial_trust_region: float = 1.0,
                  trust_region_expand: float = 1.5,
                  trust_region_shrink: float = 0.5,
+                 endpoint_jnt_tol: float = 0.02,
                  verbose: bool = False):
         self.max_iterations = max_iterations
         self.constraint_tol = constraint_tol
@@ -87,6 +92,7 @@ class SQPSolver:
         self.initial_trust_region = initial_trust_region
         self.trust_region_expand = trust_region_expand
         self.trust_region_shrink = trust_region_shrink
+        self.endpoint_jnt_tol = endpoint_jnt_tol
         self.verbose = verbose
 
     def solve(self, x_init: np.ndarray,
@@ -147,7 +153,8 @@ class SQPSolver:
                 obstacle_constraint=obstacle_constraint,
                 start_grasp_set=start_grasp_set,
                 goal_grasp_set=goal_grasp_set,
-                trust_region=trust_radius
+                trust_region=trust_radius,
+                endpoint_jnt_tol=self.endpoint_jnt_tol
             )
 
             # Stack all constraints
