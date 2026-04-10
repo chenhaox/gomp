@@ -13,7 +13,7 @@ from gomp.planner.trajectory import Trajectory
 from gomp.obstacles.depth_map import DepthMapObstacle
 
 import gomp  # noqa: F401
-from wrs import modeling as gm
+from wrs.modeling import geometric_model as gm
 
 
 def visualize_trajectory(robot_adapter: RobotAdapter,
@@ -81,7 +81,7 @@ def visualize_trajectory(robot_adapter: RobotAdapter,
     # Draw end-effector path
     for i in range(len(ee_positions) - 1):
         gm.gen_stick(spos=ee_positions[i], epos=ee_positions[i + 1],
-                     radius=0.003, rgba=[1, 0.3, 0, 1]).attach_to(base)
+                     radius=0.003, rgb=np.array([1, 0.3, 0])).attach_to(base)
 
     # Draw start/end frames
     if len(ee_positions) > 0:
@@ -123,5 +123,5 @@ def _draw_bin_obstacle(base, depth_map: DepthMapObstacle):
                 pos = np.array([x, y, z / 2])
                 size = np.array([depth_map.resolution * step,
                                  depth_map.resolution * step, z])
-                gm.gen_box(extent=size, pos=pos,
-                          rgba=[0.6, 0.6, 0.8, 0.5]).attach_to(base)
+                gm.gen_box(xyz_lengths=size, pos=pos,
+                          rgb=np.array([0.6, 0.6, 0.8]), alpha=0.5).attach_to(base)

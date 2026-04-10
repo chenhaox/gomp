@@ -19,7 +19,7 @@ class RobotAdapter:
         n_dof: Number of degrees of freedom.
     """
 
-    def __init__(self, manipulator_cls=None, enable_cc=False, **kwargs):
+    def __init__(self, manipulator_cls=None, enable_cc=True, **kwargs):
         """
         Parameters
         ----------
