@@ -143,7 +143,7 @@ See [IMPLEMENTATION.md](IMPLEMENTATION.md) for a detailed mapping between the pa
 ### Known Limitations
 
 - **EE-only obstacle checking:** The depth-map obstacle constraint only checks the end-effector z-position. Other links (forearm, elbow) are not checked. This is sufficient for shallow bins but may allow collisions in deep-bin scenarios.
-- **Orientation linearization:** The grasp constraint uses a log-map (axis-angle) orientation error, which is accurate for small errors but can cause slow convergence when the initial orientation error exceeds ~30°. The IK warm-start typically ensures small errors.
+- **Orientation linearization:** The grasp constraint uses a log-map (axis-angle) orientation error for the SQP linearization. This is the standard approach (same as TrajOpt) and is accurate when the trust region keeps step sizes small. A robust near-π fallback handles the `sin(angle)→0` singularity.
 - **Warm-start dynamics mismatch:** The spline warm-start forces zero velocity at endpoints, which technically violates the dynamics constraint at `q₁`. The SQP corrects this immediately.
 
 ## Citation

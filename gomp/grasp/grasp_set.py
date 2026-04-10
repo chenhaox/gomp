@@ -154,6 +154,10 @@ class GraspSet:
         From Section IV-D, Equation (10):
             b_0^{(k+1)} = R_0 * (g_start^{z-} - p(q_0^{(k)}) + J^{(k)} * q_0^{(k)})
 
+        The pose error g - p(q) is computed as a 6-vector:
+        - Position: simple subtraction (R^3)
+        - Orientation: log-map of R_target @ R_current^T (rotation vector)
+
         Parameters
         ----------
         q_current : np.ndarray, shape (n_dof,)
@@ -173,19 +177,11 @@ class GraspSet:
         pos_target = self.grasp.pos
         rotmat_target = self.grasp.rotmat
 
-        # Compute pose error in SE(3) as a 6-vector
+        # Position error (R^3 subtraction — always exact)
         pos_error = pos_target - pos_current
-        # Orientation error as axis-angle
-        rotmat_error = rotmat_target @ rotmat_current.T
-        angle = np.arccos(np.clip((np.trace(rotmat_error) - 1) / 2, -1, 1))
-        if angle < 1e-10:
-            orient_error = np.zeros(3)
-        else:
-            orient_error = angle / (2 * np.sin(angle)) * np.array([
-                rotmat_error[2, 1] - rotmat_error[1, 2],
-                rotmat_error[0, 2] - rotmat_error[2, 0],
-                rotmat_error[1, 0] - rotmat_error[0, 1]
-            ])
+
+        # Orientation error via robust log-map: log(R_target @ R_current^T)
+        orient_error = self._logmap_rotation_error(rotmat_target, rotmat_current)
 
         # 6-vector: [position_error; orientation_error]
         pose_error = np.concatenate([pos_error, orient_error])
@@ -196,3 +192,79 @@ class GraspSet:
         # b = R_0 * (pose_error + J * q_current)
         b = R_0 @ (pose_error + J @ q_current)
         return b
+
+    @staticmethod
+    def _logmap_rotation_error(R_target: np.ndarray,
+                               R_current: np.ndarray) -> np.ndarray:
+        """
+        Compute the rotation vector (axis-angle) error between two rotations.
+
+        Uses the logarithmic map: log(R_target @ R_current^T).
+        Handles three regimes to avoid numerical singularities:
+        1. angle ≈ 0  → return zeros
+        2. 0 < angle < π-δ → standard log-map via skew-symmetric extraction
+        3. angle ≈ π  → extract axis from (R + I) to avoid sin(angle)→0
+
+        Parameters
+        ----------
+        R_target : np.ndarray, shape (3, 3)
+        R_current : np.ndarray, shape (3, 3)
+
+        Returns
+        -------
+        orient_error : np.ndarray, shape (3,)
+            Rotation vector (axis × angle).
+        """
+        R_err = R_target @ R_current.T
+        cos_angle = np.clip((np.trace(R_err) - 1.0) / 2.0, -1.0, 1.0)
+        angle = np.arccos(cos_angle)
+
+        if angle < 1e-10:
+            # Near zero rotation — first-order approximation
+            return np.array([
+                R_err[2, 1] - R_err[1, 2],
+                R_err[0, 2] - R_err[2, 0],
+                R_err[1, 0] - R_err[0, 1]
+            ]) * 0.5
+
+        if angle > np.pi - 1e-6:
+            # Near π: sin(angle) ≈ 0, so the standard formula is unstable.
+            # Use: R = I + 2 * (a @ a.T) - 2 * I  when angle=π
+            #   => R + I = 2 * a @ a.T  (symmetric, rank-1)
+            # The rotation axis is the column of (R+I) with largest norm.
+            S = R_err + np.eye(3)
+            col_norms = np.linalg.norm(S, axis=0)
+            best_col = np.argmax(col_norms)
+            axis = S[:, best_col]
+            norm = np.linalg.norm(axis)
+            if norm < 1e-12:
+                return np.zeros(3)
+            axis = axis / norm
+            return axis * angle
+
+        # Standard log-map: angle / (2 sin(angle)) * vex(R - R^T)
+        sin_angle = np.sin(angle)
+        return (angle / (2.0 * sin_angle)) * np.array([
+            R_err[2, 1] - R_err[1, 2],
+            R_err[0, 2] - R_err[2, 0],
+            R_err[1, 0] - R_err[0, 1]
+        ])
+
+    def check_orientation_error(self, q: np.ndarray) -> float:
+        """
+        Compute the orientation error magnitude for diagnostics.
+
+        Parameters
+        ----------
+        q : np.ndarray, shape (n_dof,)
+            Joint configuration.
+
+        Returns
+        -------
+        angle_deg : float
+            Orientation error in degrees.
+        """
+        _, rotmat_current = self.robot.forward_kinematics(q)
+        R_err = self.grasp.rotmat @ rotmat_current.T
+        cos_angle = np.clip((np.trace(R_err) - 1.0) / 2.0, -1.0, 1.0)
+        return np.degrees(np.arccos(cos_angle))
