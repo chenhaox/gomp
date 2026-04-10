@@ -105,7 +105,8 @@ class GraspSet:
         return R_0
 
     def compute_epsilon(self, free_tol: float = 1e3,
-                        tight_tol: float = 0.01) -> np.ndarray:
+                        pos_tol: float = 0.001,
+                        orient_tol: float = 0.01) -> np.ndarray:
         """
         Compute the tolerance vector ε_0 for the grasp DOF constraint.
 
@@ -116,21 +117,27 @@ class GraspSet:
         After R_0 rotation, the DOF aligns with the z-axis, so:
         - ε[5] (angular z) is large (free) when the grasp has rotational DOF
         - ε[5] stays tight when theta_min ≈ theta_max (single fixed pose)
-        - All other components are tight
+        - Position components (ε[0:3]) use a tight positional tolerance
+        - Orientation components (ε[3:6]) use a slightly looser tolerance
+          for numerical stability of the linearized constraint
 
         Parameters
         ----------
         free_tol : float
             Large tolerance for the free DOF.
-        tight_tol : float
-            Small tolerance for constrained directions.
+        pos_tol : float
+            Tolerance for position components (meters). Default 1mm.
+        orient_tol : float
+            Tolerance for orientation components (radians). Default ~0.6°.
 
         Returns
         -------
         epsilon : np.ndarray, shape (6,)
             Tolerance vector.
         """
-        epsilon = np.full(6, tight_tol)
+        epsilon = np.empty(6)
+        epsilon[:3] = pos_tol      # position: tight (1mm)
+        epsilon[3:] = orient_tol   # orientation: small but allows linearization error
         # After R_0 rotation, the grasp rotation axis aligns with z.
         # Only free the angular-z component if the grasp has a non-trivial
         # rotational DOF range; otherwise keep it tight (single fixed pose).

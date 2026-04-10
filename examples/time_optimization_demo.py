@@ -65,7 +65,7 @@ def main():
     obs = DepthMapObstacle.create_bin_obstacle(
         bin_center=np.array([0.4, 0.0, 0.0]),
         bin_size=(0.3, 0.4, 0.15),
-        wall_height=0.15
+        wall_height=0.35
     )
     obs_constraint = ObstacleConstraint(robot, obs)
 
