@@ -6,8 +6,30 @@ along with timing and grasp information.
 """
 
 import numpy as np
-from dataclasses import dataclass
-from typing import Tuple
+from dataclasses import dataclass, field
+from typing import Tuple, Optional
+
+
+@dataclass
+class CollisionReport:
+    """
+    Result of a trajectory collision validation.
+
+    Attributes
+    ----------
+    is_valid : bool
+        True if the entire trajectory is collision-free.
+    collisions : list of tuple (int, object)
+        List of (waypoint_index, collision_info) for each collision detected.
+    first_collision_time : float or None
+        Time (seconds) of the first collision along the trajectory.
+    n_waypoints_checked : int
+        Total number of waypoints checked.
+    """
+    is_valid: bool
+    collisions: list = field(default_factory=list)
+    first_collision_time: Optional[float] = None
+    n_waypoints_checked: int = 0
 
 
 @dataclass
@@ -29,6 +51,11 @@ class Trajectory:
         Optimized grasp rotation at the start (radians).
     goal_theta : float
         Optimized grasp rotation at the goal (radians).
+    is_collision_free : bool or None
+        Whether the trajectory has been validated as collision-free.
+        None if not yet checked.
+    collision_report : CollisionReport or None
+        Detailed collision validation results.
     """
     waypoints: np.ndarray
     velocities: np.ndarray
@@ -36,6 +63,8 @@ class Trajectory:
     H: int
     start_theta: float = 0.0
     goal_theta: float = 0.0
+    is_collision_free: Optional[bool] = None
+    collision_report: Optional[CollisionReport] = None
 
     @property
     def duration(self) -> float:
@@ -125,3 +154,30 @@ class Trajectory:
             'velocity': vel_ok,
             'acceleration': acc_ok
         }
+
+    def to_motion_data(self, robot):
+        """
+        Convert to WRS MotionData for compatibility with WRS workflows.
+
+        Parameters
+        ----------
+        robot : ManipulatorInterface
+            The WRS robot model (must match the DOF of this trajectory).
+
+        Returns
+        -------
+        mot_data : MotionData
+            WRS-compatible motion data with jv_list populated.
+        """
+        import wrs.motion.motion_data as motd
+
+        mot_data = motd.MotionData(robot)
+        jv_list = [self.waypoints[i] for i in range(self.n_waypoints)]
+        # Populate jv_list directly instead of using extend()
+        # since extend() requires get_ee_values which ManipulatorInterface lacks
+        mot_data._jv_list = jv_list
+        mot_data._ev_list = [None] * len(jv_list)
+        mot_data._mesh_list = [None] * len(jv_list)
+        mot_data._oiee_gl_pose_list = [None] * len(jv_list)
+        return mot_data
+

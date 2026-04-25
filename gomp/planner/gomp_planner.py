@@ -26,6 +26,7 @@ from gomp.obstacles.collision import ObstacleConstraint
 from gomp.optimization.qp_builder import QPBuilder
 from gomp.optimization.sqp_solver import SQPSolver
 from gomp.optimization.warm_start import spline_warm_start, interpolate_to_shorter
+from gomp.optimization.fast_kinematics import FastKinematics
 from gomp.planner.trajectory import Trajectory
 
 
@@ -82,10 +83,15 @@ class GOMPPlanner:
             self.sqp_kwargs['verbose'] = verbose
         self.sqp_solver = SQPSolver(**self.sqp_kwargs)
 
+        # Pre-compile fast kinematics engine
+        self.fast_kin = FastKinematics(robot)
+
     def plan(self,
              grasp_start: Grasp,
              grasp_goal: Grasp,
-             obstacles: Optional[DepthMapObstacle] = None) -> Optional[Trajectory]:
+             obstacles: Optional[DepthMapObstacle] = None,
+             ik_seed_start: Optional[np.ndarray] = None,
+             ik_seed_goal: Optional[np.ndarray] = None) -> Optional[Trajectory]:
         """
         Plan a minimum-time trajectory from grasp_start to grasp_goal.
 
@@ -103,6 +109,10 @@ class GOMPPlanner:
             Goal grasp with rotational DOF.
         obstacles : DepthMapObstacle or None
             Obstacle depth map.
+        ik_seed_start : np.ndarray or None
+            Known IK solution for start grasp (bypasses IK solver).
+        ik_seed_goal : np.ndarray or None
+            Known IK solution for goal grasp (bypasses IK solver).
 
         Returns
         -------
@@ -120,13 +130,25 @@ class GOMPPlanner:
         start_grasp_set = GraspSet(grasp_start, self.robot)
         goal_grasp_set = GraspSet(grasp_goal, self.robot)
 
-        q_start = start_grasp_set.get_topdown_ik()
+        # Use provided IK seeds or solve IK
+        if ik_seed_start is not None:
+            # Pre-seed the cache so get_topdown_ik returns the known config
+            start_grasp_set._ik_cache[0.0] = ik_seed_start
+            q_start = ik_seed_start
+        else:
+            q_start = start_grasp_set.get_topdown_ik()
+
         if q_start is None:
             if self.verbose:
                 print("GOMP: Failed to find IK for start grasp")
             return None
 
-        q_goal = goal_grasp_set.get_topdown_ik(seed_jnt_values=q_start)
+        if ik_seed_goal is not None:
+            goal_grasp_set._ik_cache[0.0] = ik_seed_goal
+            q_goal = ik_seed_goal
+        else:
+            q_goal = goal_grasp_set.get_topdown_ik(seed_jnt_values=q_start)
+
         if q_goal is None:
             if self.verbose:
                 print("GOMP: Failed to find IK for goal grasp")
@@ -141,7 +163,8 @@ class GOMPPlanner:
         obs_constraint = None
         if obstacles is not None:
             obs_constraint = ObstacleConstraint(
-                self.robot, obstacles, safety_margin=0.01
+                self.robot, obstacles, safety_margin=0.01,
+                fast_kin=self.fast_kin
             )
 
         # --- Step 3: Initialize trajectory with spline ---
@@ -168,7 +191,8 @@ class GOMPPlanner:
                 robot=self.robot,
                 obstacle_constraint=obs_constraint,
                 start_grasp_set=start_grasp_set,
-                goal_grasp_set=goal_grasp_set
+                goal_grasp_set=goal_grasp_set,
+                fast_kin=self.fast_kin
             )
 
             if not result.feasible:

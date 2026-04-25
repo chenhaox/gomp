@@ -35,6 +35,29 @@ class RobotAdapter:
         self.robot = manipulator_cls(enable_cc=enable_cc, **kwargs)
         self.n_dof = self.robot.n_dof
 
+    @classmethod
+    def from_wrs_robot(cls, robot):
+        """
+        Create a RobotAdapter from an existing WRS robot instance.
+
+        This avoids creating a new robot — useful when integrating with
+        an existing WRS application.
+
+        Parameters
+        ----------
+        robot : ManipulatorInterface
+            An existing WRS manipulator.
+
+        Returns
+        -------
+        RobotAdapter
+            Adapter wrapping the given robot.
+        """
+        adapter = cls.__new__(cls)
+        adapter.robot = robot
+        adapter.n_dof = robot.n_dof
+        return adapter
+
     # ----- Joint limits -----
 
     @property
@@ -130,11 +153,40 @@ class RobotAdapter:
         """Set the robot to a specific joint configuration (updates internal state)."""
         self.robot.goto_given_conf(jnt_values=q)
 
-    def is_collided(self, obstacle_list=None) -> bool:
-        """Check if the robot is in self-collision or colliding with obstacles."""
+    def backup_state(self):
+        """Save the current robot state for later restoration."""
+        self.robot.backup_state()
+
+    def restore_state(self):
+        """Restore the previously saved robot state."""
+        self.robot.restore_state()
+
+    def is_collided(self, obstacle_list=None, other_robot_list=None,
+                    toggle_contacts=False) -> bool:
+        """
+        Check if the robot is in self-collision or colliding with obstacles.
+
+        Parameters
+        ----------
+        obstacle_list : list
+            List of WRS CollisionModel obstacles.
+        other_robot_list : list
+            List of other WRS robot instances.
+        toggle_contacts : bool
+            If True, return (bool, contact_points) instead of just bool.
+
+        Returns
+        -------
+        collided : bool or (bool, list)
+            Whether the robot is in collision.
+        """
         if obstacle_list is None:
             obstacle_list = []
-        return self.robot.is_collided(obstacle_list=obstacle_list)
+        if other_robot_list is None:
+            other_robot_list = []
+        return self.robot.is_collided(obstacle_list=obstacle_list,
+                                      otherrobot_list=other_robot_list,
+                                      toggle_contacts=toggle_contacts)
 
     def get_link_positions(self, q: np.ndarray) -> list:
         """

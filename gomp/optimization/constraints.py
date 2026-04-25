@@ -47,10 +47,12 @@ class ConstraintBuilder:
         Robot model for FK/Jacobian.
     """
 
-    def __init__(self, qp: QPBuilder, t_step: float, robot: RobotAdapter):
+    def __init__(self, qp: QPBuilder, t_step: float, robot: RobotAdapter,
+                 fast_kin=None):
         self.qp = qp
         self.t_step = t_step
         self.robot = robot
+        self.fast_kin = fast_kin
         self.n = qp.n
         self.H = qp.H
         self.m = qp.n_waypoints  # H + 1
@@ -375,10 +377,14 @@ class ConstraintBuilder:
         # Compute constraint matrices
         R_0 = grasp_set.compute_constraint_rotation()  # 6×6
         epsilon = grasp_set.compute_epsilon()  # 6
-        b = grasp_set.compute_constraint_bounds(q_current, R_0)  # 6
+        b = grasp_set.compute_constraint_bounds(q_current, R_0,
+                                                fast_kin=self.fast_kin)  # 6
 
-        # Jacobian at current config
-        J = self.robot.jacobian(q_current)  # 6×n
+        # Jacobian at current config (use fast_kin if available)
+        if self.fast_kin is not None:
+            _, _, J = self.fast_kin.fk_and_jacobian(q_current)
+        else:
+            J = self.robot.jacobian(q_current)  # 6×n
 
         # A_coeff = R_0 @ J, applied to the appropriate waypoint's q
         A_coeff = R_0 @ J  # 6×n
@@ -448,7 +454,10 @@ class ConstraintBuilder:
         # The grasp DOF is rotation about grasp.axis. In joint space,
         # this maps to the Jacobian pseudo-inverse of the angular velocity
         # along that axis.
-        J = self.robot.jacobian(q_ik)  # 6×n
+        if self.fast_kin is not None:
+            _, _, J = self.fast_kin.fk_and_jacobian(q_ik)
+        else:
+            J = self.robot.jacobian(q_ik)  # 6×n
         axis = grasp_set.grasp.axis    # 3-vector
 
         # The angular part of the Jacobian (rows 3:6)

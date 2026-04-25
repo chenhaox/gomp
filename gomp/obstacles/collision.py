@@ -7,10 +7,14 @@ using the robot's current configuration and Jacobian:
     z_obstacle - p(q_i^{(k)}) + J_z^{(k)} * q_i^{(k)} ≤ J_z^{(k)} * q_i^{(k+1)}
 
 where J_z is the z-translation row of the Jacobian.
+
+Performance: Uses FastKinematics for batched FK+Jacobian computation,
+replacing the serial per-waypoint Python loop that was the #1 bottleneck
+(87% of total planning time in profiling).
 """
 
 import numpy as np
-from typing import List, Tuple
+from typing import Tuple
 
 from gomp.robot_adapter import RobotAdapter
 from gomp.obstacles.depth_map import DepthMapObstacle
@@ -32,13 +36,17 @@ class ObstacleConstraint:
         The obstacle depth map.
     safety_margin : float
         Additional clearance above the depth map surface (meters).
+    fast_kin : FastKinematics or None
+        Pre-compiled fast kinematics engine. If None, falls back to
+        robot_adapter FK/Jacobian (slower).
     """
 
     def __init__(self, robot: RobotAdapter, depth_map: DepthMapObstacle,
-                 safety_margin: float = 0.01):
+                 safety_margin: float = 0.01, fast_kin=None):
         self.robot = robot
         self.depth_map = depth_map
         self.safety_margin = safety_margin
+        self.fast_kin = fast_kin
 
     def compute_for_waypoint(self, q: np.ndarray) -> Tuple[np.ndarray, float]:
         """
@@ -64,8 +72,14 @@ class ObstacleConstraint:
             The right-hand side of the linearized constraint:
             z_obstacle + margin - p_z(q^{(k)}) + J_z * q^{(k)}
         """
-        # Forward kinematics at current config
-        pos, _ = self.robot.forward_kinematics(q)
+        if self.fast_kin is not None:
+            pos, _, J = self.fast_kin.fk_and_jacobian(q)
+        else:
+            # Forward kinematics at current config
+            pos, _ = self.robot.forward_kinematics(q)
+            # Jacobian
+            J = self.robot.jacobian(q)
+
         p_z = pos[2]  # z-position of end-effector
         p_x, p_y = pos[0], pos[1]
 
@@ -73,7 +87,6 @@ class ObstacleConstraint:
         z_obstacle = self.depth_map.get_obstacle_height(p_x, p_y)
 
         # Jacobian z-row (translation z)
-        J = self.robot.jacobian(q)
         J_z = J[2, :]  # z-translation row
 
         # Right-hand side: z_obstacle + margin - p_z + J_z @ q
@@ -84,6 +97,8 @@ class ObstacleConstraint:
     def compute_all_waypoints(self, waypoints: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute linearized obstacle constraints for all waypoints.
+
+        Uses batch FK+Jacobian computation for significant speedup.
 
         Parameters
         ----------
@@ -98,13 +113,34 @@ class ObstacleConstraint:
             Right-hand side for each waypoint.
         """
         H_plus_1, n = waypoints.shape
-        J_z_all = np.zeros((H_plus_1, n))
-        rhs_all = np.zeros(H_plus_1)
 
-        for i in range(H_plus_1):
-            J_z_all[i], rhs_all[i] = self.compute_for_waypoint(waypoints[i])
+        if self.fast_kin is not None:
+            # Batched computation using fast kinematics
+            positions, _, jacobians = self.fast_kin.batch_fk_and_jacobian(waypoints)
 
-        return J_z_all, rhs_all
+            # Extract z-rows of Jacobians: shape (H+1, n)
+            J_z_all = jacobians[:, 2, :]
+
+            # Get obstacle heights for all xy positions
+            z_obstacles = np.array([
+                self.depth_map.get_obstacle_height(positions[i, 0], positions[i, 1])
+                for i in range(H_plus_1)
+            ])
+
+            # Vectorized RHS computation
+            p_z_all = positions[:, 2]
+            # rhs = z_obstacle + margin - p_z + J_z @ q  (per waypoint)
+            Jz_dot_q = np.sum(J_z_all * waypoints, axis=1)
+            rhs_all = z_obstacles + self.safety_margin - p_z_all + Jz_dot_q
+
+            return J_z_all, rhs_all
+        else:
+            # Fallback: serial computation
+            J_z_all = np.zeros((H_plus_1, n))
+            rhs_all = np.zeros(H_plus_1)
+            for i in range(H_plus_1):
+                J_z_all[i], rhs_all[i] = self.compute_for_waypoint(waypoints[i])
+            return J_z_all, rhs_all
 
     def check_violation(self, q: np.ndarray) -> float:
         """
@@ -116,6 +152,9 @@ class ObstacleConstraint:
             Positive if the constraint is violated (EE below obstacle).
             Negative if satisfied (EE above obstacle).
         """
-        pos, _ = self.robot.forward_kinematics(q)
+        if self.fast_kin is not None:
+            pos, _ = self.fast_kin.fk(q)
+        else:
+            pos, _ = self.robot.forward_kinematics(q)
         z_obstacle = self.depth_map.get_obstacle_height(pos[0], pos[1])
         return z_obstacle + self.safety_margin - pos[2]

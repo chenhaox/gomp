@@ -7,6 +7,11 @@ convergence or infeasibility.
 
 Uses OSQP as the underlying QP solver for its warm-starting capabilities
 and infeasibility detection.
+
+Performance optimizations:
+- OSQP solver reuse via in-place update when sparsity pattern is unchanged
+- Pre-computed static constraints (reused across iterations)
+- Timing instrumentation for profiling
 """
 
 import numpy as np
@@ -14,6 +19,7 @@ import osqp
 import scipy.sparse as sp
 from dataclasses import dataclass
 from typing import Optional
+import time as time_module
 
 from gomp.optimization.qp_builder import QPBuilder
 from gomp.optimization.constraints import ConstraintBuilder
@@ -100,7 +106,8 @@ class SQPSolver:
               robot: RobotAdapter,
               obstacle_constraint: Optional[ObstacleConstraint] = None,
               start_grasp_set: Optional[GraspSet] = None,
-              goal_grasp_set: Optional[GraspSet] = None) -> SQPResult:
+              goal_grasp_set: Optional[GraspSet] = None,
+              fast_kin=None) -> SQPResult:
         """
         Run the SQP loop for a fixed horizon H.
 
@@ -122,6 +129,9 @@ class SQPSolver:
             Start grasp set with DOF.
         goal_grasp_set : GraspSet or None
             Goal grasp set with DOF.
+        fast_kin : FastKinematics or None
+            Pre-compiled fast kinematics for the grasp constraint
+            Jacobian computation.
 
         Returns
         -------
@@ -129,11 +139,12 @@ class SQPSolver:
             The result of the optimization.
         """
         qp = QPBuilder(H, n)
-        cb = ConstraintBuilder(qp, t_step, robot)
+        cb = ConstraintBuilder(qp, t_step, robot, fast_kin=fast_kin)
 
         # Build objective (doesn't change)
         P = qp.build_P()
         p = qp.build_p()
+        P_upper = sp.triu(P, format='csc')
 
         # Build static constraints (don't change between SQP iterations)
         A_static, l_static, u_static = cb.build_static_constraints()
@@ -141,6 +152,7 @@ class SQPSolver:
         # Initialize
         x_current = x_init.copy()
         trust_radius = self.initial_trust_region
+        prev_nnz = None  # Track sparsity pattern for OSQP reuse
         osqp_solver = None
 
         for iteration in range(self.max_iterations):
@@ -148,6 +160,7 @@ class SQPSolver:
             waypoints = qp.extract_waypoints(x_current)
 
             # Build dynamic constraints (updated each iteration)
+            t0 = time_module.perf_counter() if self.verbose else 0
             A_dynamic, l_dynamic, u_dynamic = cb.build_dynamic_constraints(
                 waypoints=waypoints,
                 obstacle_constraint=obstacle_constraint,
@@ -156,31 +169,31 @@ class SQPSolver:
                 trust_region=trust_radius,
                 endpoint_jnt_tol=self.endpoint_jnt_tol
             )
+            t_constraints = time_module.perf_counter() - t0 if self.verbose else 0
 
             # Stack all constraints
             A = sp.vstack([A_static, A_dynamic], format='csc')
             l = np.concatenate([l_static, l_dynamic])
             u = np.concatenate([u_static, u_dynamic])
 
-            # Solve QP — always create fresh solver since sparsity pattern
-            # changes between SQP iterations (different Jacobians)
-            osqp_solver = osqp.OSQP()
-            osqp_solver.setup(
-                P=sp.triu(P, format='csc'),
-                q=p,
-                A=A,
-                l=l,
-                u=u,
-                eps_abs=1e-5,
-                eps_rel=1e-5,
-                max_iter=4000,
-                warm_start=True,
-                verbose=False,
-                polish=True
-            )
-            osqp_solver.warm_start(x=x_current)
+            # Try to reuse OSQP solver if sparsity pattern is unchanged
+            t0 = time_module.perf_counter() if self.verbose else 0
+            current_nnz = A.nnz
+
+            if osqp_solver is not None and current_nnz == prev_nnz:
+                # Attempt in-place update (same sparsity pattern)
+                try:
+                    osqp_solver.update(Ax=A.data, l=l, u=u)
+                    osqp_solver.warm_start(x=x_current)
+                except Exception:
+                    # Sparsity pattern changed despite same nnz — recreate
+                    osqp_solver = self._create_solver(P_upper, p, A, l, u, x_current)
+            else:
+                osqp_solver = self._create_solver(P_upper, p, A, l, u, x_current)
+            prev_nnz = current_nnz
 
             result = osqp_solver.solve()
+            t_solve = time_module.perf_counter() - t0 if self.verbose else 0
 
             # Check feasibility
             if result.info.status == 'primal infeasible' or \
@@ -220,7 +233,9 @@ class SQPSolver:
             if self.verbose:
                 cost = 0.5 * x_new @ P @ x_new
                 print(f"  SQP iter {iteration}: cost={cost:.6f}, "
-                      f"delta_x={delta_x:.6f}, trust_r={trust_radius:.4f}")
+                      f"delta_x={delta_x:.6f}, trust_r={trust_radius:.4f}, "
+                      f"constraints={t_constraints*1000:.1f}ms, "
+                      f"solve={t_solve*1000:.1f}ms")
 
             # Update solution
             x_current = x_new
@@ -248,6 +263,26 @@ class SQPSolver:
             final_cost=final_cost,
             constraint_violation=constraint_violation
         )
+
+    @staticmethod
+    def _create_solver(P_upper, p, A, l, u, x_warm):
+        """Create a fresh OSQP solver instance."""
+        solver = osqp.OSQP()
+        solver.setup(
+            P=P_upper,
+            q=p,
+            A=A,
+            l=l,
+            u=u,
+            eps_abs=1e-5,
+            eps_rel=1e-5,
+            max_iter=4000,
+            warm_start=True,
+            verbose=False,
+            polish=True
+        )
+        solver.warm_start(x=x_warm)
+        return solver
 
     @staticmethod
     def _compute_constraint_violation(A, l, u, x) -> float:

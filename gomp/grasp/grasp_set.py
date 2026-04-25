@@ -147,7 +147,8 @@ class GraspSet:
         return epsilon
 
     def compute_constraint_bounds(self, q_current: np.ndarray,
-                                  R_0: np.ndarray) -> np.ndarray:
+                                  R_0: np.ndarray,
+                                  fast_kin=None) -> np.ndarray:
         """
         Compute the constraint bound vector b_0^{(k+1)} for SQP iteration.
 
@@ -164,14 +165,20 @@ class GraspSet:
             Current joint configuration at this waypoint.
         R_0 : np.ndarray, shape (6, 6)
             The DOF-alignment rotation matrix.
+        fast_kin : FastKinematics or None
+            Pre-compiled fast kinematics. If provided, uses it for FK+Jacobian.
 
         Returns
         -------
         b : np.ndarray, shape (6,)
             Constraint bound vector.
         """
-        # Current FK
-        pos_current, rotmat_current = self.robot.forward_kinematics(q_current)
+        # Current FK + Jacobian (use fast_kin if available)
+        if fast_kin is not None:
+            pos_current, rotmat_current, J = fast_kin.fk_and_jacobian(q_current)
+        else:
+            pos_current, rotmat_current = self.robot.forward_kinematics(q_current)
+            J = self.robot.jacobian(q_current)
 
         # Target pose (top-down grasp)
         pos_target = self.grasp.pos
@@ -185,9 +192,6 @@ class GraspSet:
 
         # 6-vector: [position_error; orientation_error]
         pose_error = np.concatenate([pos_error, orient_error])
-
-        # Jacobian at current config
-        J = self.robot.jacobian(q_current)
 
         # b = R_0 * (pose_error + J * q_current)
         b = R_0 @ (pose_error + J @ q_current)
