@@ -61,7 +61,7 @@ def main():
         positions.append(robot.gl_tcp_pos.copy())
     print(f"规划成功，{len(path)} 个插值采样点通过约束及碰撞复核。")
 
-    # 3. 显示约束区域、TCP 路径和关键姿态。
+    # 3. 显示约束区域和 TCP 路径；只回放一个机器人，避免残影干扰。
     base = wd.World(cam_pos=[-1.7, -1.8, 1.1], lookat_pos=[-.3, -.1, .18])
     base.setBackgroundColor(.95, .97, .99, 1)
     mgm.gen_frame(ax_length=.15).attach_to(base)
@@ -76,9 +76,6 @@ def main():
         mgm.gen_stick(spos=a, epos=b, radius=.003, rgb=[0., .5, .55]).attach_to(base)
     for pos, color in ((positions[0], [.1, .7, .3]), (positions[-1], [.2, .3, .8])):
         mgm.gen_sphere(pos=pos, radius=.012, rgb=color).attach_to(base)
-    for i in np.linspace(0, len(path) - 1, 3, dtype=int):
-        robot.goto_given_conf(path[i])
-        robot.gen_meshmodel(alpha=.14).attach_to(base)
     OnscreenText(text="Constrained RRT-connect | Space: pause/resume\n"
                       f"Red: TCP keep-out sphere (r={radius:.2f} m)\n"
                       f"Blue: height bounds [{z_min:.2f}, {z_max:.2f}] m\n"
