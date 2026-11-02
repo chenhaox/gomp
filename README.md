@@ -111,6 +111,23 @@ Shows how the trajectory evolves as the time horizon H shrinks, with all EE path
 
 ## Examples
 
+### Callback-constrained RRT-connect
+
+`ConstrainedRRTConnect` extends the existing WRS RRT-connect with a
+`constraint_fn(robot, conf) -> bool` callback (True means valid). Joint limits,
+collision checks, tree connections and smoothing all respect the constraint.
+See the [usage guide and visual examples](examples/README_constrained_rrt.md)
+for joint windows, TCP exclusion zones, orientation tolerances and a WRS UR3e demo.
+
+```bash
+python examples/constrained_rrt_connect.py --headless --gif
+python examples/constrained_rrt_connect_wrs.py --panda3d
+```
+
+The first command exports constraint maps, paths, margin plots and animations
+to `artifacts/constrained_rrt/`. These are discrete, rejection-based constraints;
+exact equality manifolds require a different planning method.
+
 | Example | Description |
 |---|---|
 | `basic_pick_place.py` | Simple pick-and-place with GOMP planner |
@@ -118,6 +135,8 @@ Shows how the trajectory evolves as the time horizon H shrinks, with all EE path
 | `time_optimization_demo.py` | Plots joint velocity/acceleration profiles as H decreases (matplotlib) |
 | `visualize_trajectory_wrs.py` | 3D animated trajectory playback with ghost poses and grasp sets (Panda3D) |
 | `visualize_optimization_wrs.py` | 3D visualization of the H-reduction process (Panda3D) |
+| `constrained_rrt_connect.py` | Three callback-constrained two-link examples; constraint maps, robot playback and margin plots |
+| `constrained_rrt_connect_wrs.py` | WRS UR3e with TCP sphere, height and tool-axis constraints; 3D plots and Panda3D playback |
 
 ## Implementation Status
 

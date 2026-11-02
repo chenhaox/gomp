@@ -24,3 +24,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated example plots, animations and sampled paths
+artifacts/
