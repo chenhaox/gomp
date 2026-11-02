@@ -105,6 +105,9 @@ Panda3D 窗口中空格暂停/继续，鼠标操作沿用 WRS 的视角控制。
 [连杆局部坐标修复](https://github.com/chenhaox/wrs-jlchain-native/tree/codex/fix-link-local-poses)
 的版本。旧版代理忽略了连杆相对关节的平移和旋转，会同时造成网格脱节和碰撞位置错误；
 正确的变换是 `T_world_link = T_world_joint @ T_joint_link`。
+更新时请使用 **IDE 实际选中的 Python 解释器**，它可能与终端的默认 `python` 不同。
+示例会在开始规划前检查连杆位姿；若加载了旧后端，立即停止，并在错误信息中
+列出实际的 Python 可执行文件和后端模块路径，避免继续使用错位的碰撞模型。
 
 ![UR3e 约束及最终路径](assets/constrained_rrt_ur3e.png)
 

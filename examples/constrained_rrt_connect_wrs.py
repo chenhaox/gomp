@@ -17,12 +17,26 @@ from wrs.robot_sim.robots.ur3e_dual.ur3e_rtqhe import UR3e_RtqHE
 from direct.gui.OnscreenText import OnscreenText
 
 
+def check_link_poses(robot):
+    """发现旧 native 包时立即报错，避免用错位的网格和碰撞体规划。"""
+    for joint in robot.manipulator.jlc.jnts:
+        expected_pos = joint.gl_pos_q + joint.gl_rotmat_q @ joint.lnk.loc_pos
+        expected_rot = joint.gl_rotmat_q @ joint.lnk.loc_rotmat
+        if (not np.allclose(joint.lnk.gl_pos, expected_pos, rtol=0, atol=1e-9)
+                or not np.allclose(joint.lnk.gl_rotmat, expected_rot, rtol=0, atol=1e-9)):
+            backend_file = sys.modules[type(robot.manipulator.jlc).__module__].__file__
+            raise RuntimeError(
+                "连杆坐标错误：请更新当前解释器中的 native 后端。\n"
+                f"Python: {sys.executable}\nBackend: {backend_file}")
+
+
 def main():
     random.seed(7)
     np.random.seed(7)
     robot = UR3e_RtqHE(enable_cc=True)
     middle = np.array([0., -.8, 1.2, -.4, 1.2, 0.])
     robot.goto_given_conf(middle)
+    check_link_poses(robot)
     start, goal = middle.copy(), middle.copy()
     start[0], goal[0] = -.5, .5
 
