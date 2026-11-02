@@ -87,32 +87,30 @@ python examples/constrained_rrt_connect.py --scenario orientation
 ### WRS UR3e：六轴机械臂
 
 ```bash
-# Matplotlib 三维路径、机器人骨架动画、三个约束余量图
+# 直接打开 WRS Panda3D：真实机器人、约束区域、最终路径和实时回放
 python examples/constrained_rrt_connect_wrs.py
-
-# 导出图片、动画和数值结果
-python examples/constrained_rrt_connect_wrs.py --headless --gif
-
-# Panda3D 真实机器人网格、半透明约束区域、实时回放
-python examples/constrained_rrt_connect_wrs.py --panda3d
 ```
 
 UR3e 示例组合了 TCP 球形禁区、高度区间和工具 z 轴方向容差。
 方向容差是相对于示例参考姿态的 **50° 圆锥范围**，工具绕自身 z 轴的旋转是自由的；
 它不是完整姿态锁定。WRS 自碰撞检测保持开启。
 Panda3D 窗口中空格暂停/继续，鼠标操作沿用 WRS 的视角控制。
+红色球体表示 TCP 禁区，蓝色平面表示高度上下界，金色箭头表示工具参考方向，
+青色曲线表示最终 TCP 路径，绿色/蓝色小球分别标记起点/终点。
+脚本按“约束回调 → 规划 → 路径复核 → Panda3D 回放”展开，固定使用种子 `7`；
+可以直接在 `main()` 中修改起终点和约束参数。此示例不生成图片、GIF 或数值文件。
 
 ![UR3e 约束及最终路径](assets/constrained_rrt_ur3e.png)
 
-两个脚本默认使用随机种子 `7`，支持 `--seed` 和 `--output-dir`。
-默认输出到 `artifacts/constrained_rrt/`（已加入 `.gitignore`）：
+二连杆脚本默认使用随机种子 `7`，支持 `--seed` 和 `--output-dir`。
+其文件默认输出到 `artifacts/constrained_rrt/`（已加入 `.gitignore`）：
 
 - `*.png`：约束区域、最终结果和余量图。
 - `*.gif`：加上 `--gif` 时导出机器人运动和同步进度指示。
 - `*.npz`：路径及复核数据，方便通过 `numpy.load(...)` 继续分析。
 
 图中的进度表示路径进度，不是执行时间；本示例没有做速度/加速度参数化。
-默认种子的三个二维场景和 UR3e 场景均在输出前以 **0.005 rad** 的更细步长独立复核。
+默认种子的三个二维场景和 UR3e 场景均在显示结果前以 **0.005 rad** 的更细步长独立复核。
 复核包括插值段；UR3e 还重新执行 WRS 碰撞检测。复核失败会报错，不会输出成功结论。
 
 ## 为什么不能只在 `_is_collided` 里加一行 callback

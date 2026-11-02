@@ -121,7 +121,7 @@ for joint windows, TCP exclusion zones, orientation tolerances and a WRS UR3e de
 
 ```bash
 python examples/constrained_rrt_connect.py --headless --gif
-python examples/constrained_rrt_connect_wrs.py --panda3d
+python examples/constrained_rrt_connect_wrs.py
 ```
 
 The first command exports constraint maps, paths, margin plots and animations
@@ -136,7 +136,7 @@ exact equality manifolds require a different planning method.
 | `visualize_trajectory_wrs.py` | 3D animated trajectory playback with ghost poses and grasp sets (Panda3D) |
 | `visualize_optimization_wrs.py` | 3D visualization of the H-reduction process (Panda3D) |
 | `constrained_rrt_connect.py` | Three callback-constrained two-link examples; constraint maps, robot playback and margin plots |
-| `constrained_rrt_connect_wrs.py` | WRS UR3e with TCP sphere, height and tool-axis constraints; 3D plots and Panda3D playback |
+| `constrained_rrt_connect_wrs.py` | Minimal WRS UR3e example with TCP sphere, height and tool-axis constraints; Panda3D playback |
 
 ## Implementation Status
 
